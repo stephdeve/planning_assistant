@@ -6,7 +6,6 @@
 
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:speech_to_text/speech_listen_options.dart';
 
 /// Commandes vocales reconnues par l'application
 enum VoiceCommand {
@@ -23,6 +22,8 @@ class SpeechService {
   bool _isListening = false;
   bool _isAvailable = false;
 
+  bool _isInitializing = false;
+
   // Callbacks pour les ViewModels
   void Function(VoiceCommand command)? onCommandRecognized;
   void Function(String partialResult)? onPartialResult;
@@ -35,11 +36,14 @@ class SpeechService {
   /// Initialise le service et vérifie la disponibilité.
   /// Retourne true si la reconnaissance vocale est disponible.
   Future<bool> initialize() async {
+    if (_isInitializing) return _isAvailable;
+    _isInitializing = true;
     _isAvailable = await _speech.initialize(
       onStatus: _onSpeechStatus,
       onError: _onSpeechError,
       debugLogging: false,
     );
+    _isInitializing = false;
     return _isAvailable;
   }
 
@@ -50,14 +54,20 @@ class SpeechService {
   /// Démarre l'écoute vocale.
   /// [localeId] : identifiant de langue, ex. 'fr_FR'
   Future<bool> startListening({String localeId = 'fr_FR'}) async {
-    if (!_isAvailable || _isListening) return false;
+    if (_isListening) return false;
+
+    if (!_isAvailable) {
+      await initialize();
+    }
+
+    if (!_isAvailable) return false;
 
     await _speech.listen(
       onResult: _onSpeechResult,
       localeId: localeId,
       listenFor: const Duration(seconds: 15), // Écoute max 15 secondes
       pauseFor: const Duration(seconds: 4),   // Pause avant arrêt auto
-      listenOptions: SpeechListenOptions(
+      listenOptions: stt.SpeechListenOptions(
         partialResults: true,
         listenMode: stt.ListenMode.dictation,
         cancelOnError: false,
@@ -92,6 +102,15 @@ class SpeechService {
     // Notifier les résultats partiels pour l'UI (indicateur visuel)
     if (!result.finalResult) {
       onPartialResult?.call(text);
+
+      // Pendant un rappel, on veut réagir vite : si un mot-clé est déjà présent
+      // dans le texte partiel, on déclenche immédiatement la commande.
+      final command = _parseCommand(text);
+      if (command != VoiceCommand.unknown) {
+        onCommandRecognized?.call(command);
+        _speech.stop();
+        _isListening = false;
+      }
       return;
     }
 

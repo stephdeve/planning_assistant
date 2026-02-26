@@ -1,10 +1,3 @@
-// ============================================================
-// FORMULAIRE DE TÂCHE — WIDGET RÉUTILISABLE
-// Ce widget gère aussi bien la création que la modification
-// d'une tâche. Il adapte son titre et son comportement selon
-// qu'une tâche initiale est fournie ou non.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,160 +5,158 @@ import '../../domain/entities/task.dart';
 import '../viewmodels/task_viewmodel.dart';
 
 class TaskFormPage extends ConsumerStatefulWidget {
-  /// Tâche à modifier (null = création d'une nouvelle tâche)
   final Task? taskToEdit;
-
   const TaskFormPage({super.key, this.taskToEdit});
-
   @override
   ConsumerState<TaskFormPage> createState() => _TaskFormPageState();
 }
 
 class _TaskFormPageState extends ConsumerState<TaskFormPage> {
-  // Clé pour valider le formulaire avant soumission
   final _formKey = GlobalKey<FormState>();
-
-  // Contrôleurs de texte
-  late final TextEditingController _titleController;
-  late final TextEditingController _descriptionController;
-
-  // État du formulaire
-  late DateTime _selectedDateTime;
-  late RecurrenceType _recurrenceType;
-  late int _recurrenceIntervalHours;
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _descCtrl;
+  late DateTime _dt;
+  late RecurrenceType _recurrence;
+  late int _intervalHours;
+  bool _saving = false;
 
   bool get _isEditing => widget.taskToEdit != null;
 
   @override
   void initState() {
     super.initState();
-
-    // Pré-remplir si on est en mode édition, sinon valeurs par défaut
-    final task = widget.taskToEdit;
-    _titleController = TextEditingController(text: task?.title ?? '');
-    _descriptionController =
-        TextEditingController(text: task?.description ?? '');
-    _selectedDateTime = task?.scheduledDateTime ??
-        DateTime.now().add(const Duration(hours: 1));
-    _recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
-    _recurrenceIntervalHours = task?.recurrenceIntervalHours ?? 1;
+    final t = widget.taskToEdit;
+    _titleCtrl = TextEditingController(text: t?.title ?? '');
+    _descCtrl = TextEditingController(text: t?.description ?? '');
+    _dt = t?.scheduledDateTime ?? DateTime.now().add(const Duration(hours: 1));
+    _recurrence = t?.recurrenceType ?? RecurrenceType.none;
+    _intervalHours = t?.recurrenceIntervalHours ?? 1;
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(_isEditing ? 'Modifier la tâche' : 'Nouvelle tâche'),
+        backgroundColor: cs.surface,
+        title: Text(
+          _isEditing ? 'Modifier la tâche' : 'Nouvelle tâche',
+          style: theme.textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
         actions: [
-          // Bouton de sauvegarde dans l'AppBar
-          TextButton.icon(
-            onPressed: _submitForm,
-            icon: const Icon(Icons.check),
-            label: const Text('Enregistrer'),
-          ),
+          _saving
+              ? const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: Center(
+                      child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))),
+                )
+              : TextButton.icon(
+                  onPressed: _submit,
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Enregistrer',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
           children: [
-            // ─── Section : Informations principales ───────────────
-            _SectionHeader(title: 'Informations', icon: Icons.info_outline),
+            // ─── Section : Infos principales ──────────────────
+            _SectionLabel(
+                icon: Icons.info_outline_rounded, label: 'Informations'),
             const SizedBox(height: 12),
 
             // Titre
             TextFormField(
-              controller: _titleController,
+              controller: _titleCtrl,
               decoration: const InputDecoration(
                 labelText: 'Titre *',
                 hintText: 'Ex: Réunion d\'équipe',
-                prefixIcon: Icon(Icons.title),
+                prefixIcon: Icon(Icons.title_rounded),
               ),
               textCapitalization: TextCapitalization.sentences,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Le titre est obligatoire';
-                }
-                if (value.trim().length < 3) {
-                  return 'Le titre doit contenir au moins 3 caractères';
-                }
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Titre obligatoire';
+                if (v.trim().length < 3)
+                  return 'Au moins 3 caractères';
                 return null;
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Description (lu à voix haute lors du rappel)
+            // Description
             TextFormField(
-              controller: _descriptionController,
+              controller: _descCtrl,
               decoration: const InputDecoration(
                 labelText: 'Description *',
                 hintText: 'Ce texte sera lu à voix haute lors du rappel',
-                prefixIcon: Icon(Icons.description),
+                prefixIcon: Icon(Icons.description_rounded),
                 alignLabelWithHint: true,
               ),
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La description est obligatoire';
-                }
+              validator: (v) {
+                if (v == null || v.trim().isEmpty)
+                  return 'Description obligatoire';
                 return null;
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
 
-            // ─── Section : Planification ───────────────────────────
-            _SectionHeader(title: 'Planification', icon: Icons.schedule),
+            // ─── Section : Planification ───────────────────────
+            _SectionLabel(
+                icon: Icons.schedule_rounded, label: 'Planification'),
             const SizedBox(height: 12),
-
-            // Sélecteur de date et heure
-            _DateTimePicker(
-              selectedDateTime: _selectedDateTime,
-              onChanged: (dt) => setState(() => _selectedDateTime = dt),
+            _DateTimeTile(
+              dt: _dt,
+              onChanged: (d) => setState(() => _dt = d),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
 
-            // ─── Section : Récurrence ──────────────────────────────
-            _SectionHeader(title: 'Récurrence', icon: Icons.repeat),
+            // ─── Section : Récurrence ──────────────────────────
+            _SectionLabel(icon: Icons.repeat_rounded, label: 'Récurrence'),
             const SizedBox(height: 12),
-
-            _RecurrencePicker(
-              selectedType: _recurrenceType,
-              intervalHours: _recurrenceIntervalHours,
-              onTypeChanged: (type) =>
-                  setState(() => _recurrenceType = type),
-              onIntervalChanged: (h) =>
-                  setState(() => _recurrenceIntervalHours = h),
+            _RecurrenceSection(
+              selected: _recurrence,
+              intervalHours: _intervalHours,
+              onTypeChanged: (r) => setState(() => _recurrence = r),
+              onInterval: (h) => setState(() => _intervalHours = h),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 36),
 
-            // ─── Bouton principal ──────────────────────────────────
+            // ─── Submit button ──────────────────────────────────
             SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _submitForm,
-                icon: Icon(_isEditing ? Icons.save : Icons.add_alarm),
+              height: 54,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _submit,
+                icon: Icon(
+                    _isEditing ? Icons.save_rounded : Icons.add_alarm_rounded),
                 label: Text(
-                  _isEditing ? 'Enregistrer les modifications' : 'Créer la tâche',
-                  style: const TextStyle(fontSize: 16),
+                  _isEditing
+                      ? 'Enregistrer les modifications'
+                      : 'Créer la tâche',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: theme.colorScheme.onPrimary,
+                style: FilledButton.styleFrom(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                      borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
@@ -175,212 +166,227 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     );
   }
 
-  Future<void> _submitForm() async {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final viewModel = ref.read(taskViewModelProvider.notifier);
+    setState(() => _saving = true);
 
     final task = Task(
       id: widget.taskToEdit?.id,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      scheduledDateTime: _selectedDateTime,
-      recurrenceType: _recurrenceType,
-      recurrenceIntervalHours: _recurrenceIntervalHours,
+      title: _titleCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
+      scheduledDateTime: _dt,
+      recurrenceType: _recurrence,
+      recurrenceIntervalHours: _intervalHours,
       createdAt: widget.taskToEdit?.createdAt ?? DateTime.now(),
     );
 
+    final vm = ref.read(taskViewModelProvider.notifier);
     if (_isEditing) {
-      await viewModel.updateTask(task);
+      await vm.updateTask(task);
     } else {
-      await viewModel.createTask(task);
+      await vm.createTask(task);
     }
 
+    setState(() => _saving = false);
     if (mounted) Navigator.of(context).pop();
   }
 }
 
 // ─────────────────────────────────────────────────────────
-// WIDGETS INTERNES
+// SOUS-COMPOSANTS
 // ─────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
+class _SectionLabel extends StatelessWidget {
   final IconData icon;
-
-  const _SectionHeader({required this.title, required this.icon});
+  final String label;
+  const _SectionLabel({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+        Icon(icon, size: 18, color: cs.primary),
         const SizedBox(width: 8),
         Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
+                color: cs.primary,
               ),
         ),
-        const SizedBox(width: 8),
-        const Expanded(child: Divider()),
+        const SizedBox(width: 10),
+        Expanded(
+            child: Divider(color: cs.outlineVariant.withValues(alpha: 0.5))),
       ],
     );
   }
 }
 
-class _DateTimePicker extends StatelessWidget {
-  final DateTime selectedDateTime;
+class _DateTimeTile extends StatelessWidget {
+  final DateTime dt;
   final ValueChanged<DateTime> onChanged;
-
-  const _DateTimePicker({
-    required this.selectedDateTime,
-    required this.onChanged,
-  });
+  const _DateTimeTile({required this.dt, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final dateFormatter = DateFormat('EEEE d MMMM yyyy', 'fr_FR');
-    final timeFormatter = DateFormat('HH:mm');
+    final cs = Theme.of(context).colorScheme;
+    final dateFmt = DateFormat('EEEE d MMMM yyyy', 'fr_FR');
+    final timeFmt = DateFormat('HH:mm');
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Sélecteur de date
-            ListTile(
-              leading: const Icon(Icons.calendar_today),
-              title: Text(dateFormatter.format(selectedDateTime)),
-              subtitle: const Text('Date du rappel'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _pickDate(context),
-              contentPadding: EdgeInsets.zero,
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
-            const Divider(height: 1),
-            // Sélecteur d'heure
-            ListTile(
-              leading: const Icon(Icons.access_time),
-              title: Text(timeFormatter.format(selectedDateTime)),
-              subtitle: const Text('Heure exacte'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _pickTime(context),
-              contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.calendar_today_rounded, color: cs.primary),
+            title: Text(dateFmt.format(dt),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('Date du rappel'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: dt,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                locale: const Locale('fr', 'FR'),
+              );
+              if (picked != null) {
+                onChanged(DateTime(
+                    picked.year, picked.month, picked.day, dt.hour, dt.minute));
+              }
+            },
+          ),
+          Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
+          ListTile(
+            shape: const RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
-          ],
-        ),
+            leading: Icon(Icons.access_time_rounded, color: cs.primary),
+            title: Text(timeFmt.format(dt),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 20)),
+            subtitle: const Text('Heure exacte'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.fromDateTime(dt),
+                builder: (ctx, child) => MediaQuery(
+                  data: MediaQuery.of(ctx)
+                      .copyWith(alwaysUse24HourFormat: true),
+                  child: child!,
+                ),
+              );
+              if (picked != null) {
+                onChanged(DateTime(dt.year, dt.month, dt.day, picked.hour,
+                    picked.minute));
+              }
+            },
+          ),
+        ],
       ),
     );
-  }
-
-  Future<void> _pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDateTime,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('fr', 'FR'),
-    );
-    if (picked != null) {
-      onChanged(DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        selectedDateTime.hour,
-        selectedDateTime.minute,
-      ));
-    }
-  }
-
-  Future<void> _pickTime(BuildContext context) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(selectedDateTime),
-      builder: (context, child) =>
-          MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!),
-    );
-    if (picked != null) {
-      onChanged(DateTime(
-        selectedDateTime.year,
-        selectedDateTime.month,
-        selectedDateTime.day,
-        picked.hour,
-        picked.minute,
-      ));
-    }
   }
 }
 
-class _RecurrencePicker extends StatelessWidget {
-  final RecurrenceType selectedType;
+class _RecurrenceSection extends StatelessWidget {
+  final RecurrenceType selected;
   final int intervalHours;
   final ValueChanged<RecurrenceType> onTypeChanged;
-  final ValueChanged<int> onIntervalChanged;
-
-  const _RecurrencePicker({
-    required this.selectedType,
+  final ValueChanged<int> onInterval;
+  const _RecurrenceSection({
+    required this.selected,
     required this.intervalHours,
     required this.onTypeChanged,
-    required this.onIntervalChanged,
+    required this.onInterval,
   });
+
+  static const Map<RecurrenceType, Map<String, Object>> _labels = {
+    RecurrenceType.none: {
+      'label': 'Unique',
+      'icon': Icons.looks_one_rounded,
+    },
+    RecurrenceType.daily: {
+      'label': 'Quotidien',
+      'icon': Icons.calendar_today_rounded,
+    },
+    RecurrenceType.weekly: {
+      'label': 'Hebdo',
+      'icon': Icons.date_range_rounded,
+    },
+    RecurrenceType.hourly: {
+      'label': 'Toutes les Xh',
+      'icon': Icons.timer_rounded,
+    },
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Choix du type de récurrence avec des chips cliquables
-            Wrap(
-              spacing: 8,
-              children: RecurrenceType.values.map((type) {
-                final isSelected = selectedType == type;
-                return ChoiceChip(
-                  label: Text(_recurrenceLabel(type)),
-                  selected: isSelected,
-                  onSelected: (_) => onTypeChanged(type),
-                );
-              }).toList(),
-            ),
-
-            // Slider pour l'intervalle en heures (seulement si hourly)
-            if (selectedType == RecurrenceType.hourly) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Icon(Icons.timer_outlined),
-                  const SizedBox(width: 8),
-                  Text('Toutes les $intervalHours heure(s)'),
-                ],
-              ),
-              Slider(
-                value: intervalHours.toDouble(),
-                min: 1,
-                max: 24,
-                divisions: 23,
-                label: '${intervalHours}h',
-                onChanged: (v) => onIntervalChanged(v.round()),
-              ),
-            ],
-          ],
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: RecurrenceType.values.map((r) {
+            final data = _labels[r]!;
+            final label = data['label'] as String;
+            final icon = data['icon'] as IconData;
+            final isSelected = selected == r;
+            return ChoiceChip(
+              avatar: Icon(icon,
+                  size: 16,
+                  color: isSelected ? cs.onPrimaryContainer : null),
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) => onTypeChanged(r),
+            );
+          }).toList(growable: false),
         ),
-      ),
+        if (selected == RecurrenceType.hourly) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.timer_rounded, size: 16, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Toutes les $intervalHours heure${intervalHours > 1 ? 's' : ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: intervalHours.toDouble(),
+                  min: 1,
+                  max: 24,
+                  divisions: 23,
+                  label: '${intervalHours}h',
+                  onChanged: (v) => onInterval(v.round()),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
-  }
-
-  String _recurrenceLabel(RecurrenceType type) {
-    switch (type) {
-      case RecurrenceType.none:
-        return 'Unique';
-      case RecurrenceType.daily:
-        return 'Quotidien';
-      case RecurrenceType.weekly:
-        return 'Hebdomadaire';
-      case RecurrenceType.hourly:
-        return 'Toutes les X heures';
-    }
   }
 }

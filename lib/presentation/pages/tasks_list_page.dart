@@ -1,9 +1,3 @@
-// ============================================================
-// PAGE LISTE DES TÂCHES — VUE COMPLÈTE
-// Affiche toutes les tâches avec filtres, tri et actions.
-// Utilise un SliverAppBar pour un effet de défilement fluide.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task.dart';
@@ -11,38 +5,39 @@ import '../viewmodels/task_viewmodel.dart';
 import 'task_form_page.dart';
 import '../widgets/task_card.dart';
 
-/// Filtres disponibles pour la liste des tâches
 enum TaskFilter { all, today, pending, completed, recurring }
 
 class TasksListPage extends ConsumerStatefulWidget {
   const TasksListPage({super.key});
-
   @override
   ConsumerState<TasksListPage> createState() => _TasksListPageState();
 }
 
 class _TasksListPageState extends ConsumerState<TasksListPage> {
-  TaskFilter _currentFilter = TaskFilter.today;
+  TaskFilter _filter = TaskFilter.today;
 
   @override
   Widget build(BuildContext context) {
     final taskState = ref.watch(taskViewModelProvider);
-    final filteredTasks = _applyFilter(taskState.allTasks);
+    final tasks = _apply(taskState.allTasks);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // AppBar qui se réduit au défilement
+          // ─── AppBar ─────────────────────────────────────
           SliverAppBar(
-            title: const Text('Mes tâches'),
-            floating: true,
-            snap: true,
+            pinned: true,
+            backgroundColor: cs.surface,
+            title: Text('Mes tâches',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
-              child: _FilterBar(
-                currentFilter: _currentFilter,
-                onFilterChanged: (f) =>
-                    setState(() => _currentFilter = f),
+              preferredSize: const Size.fromHeight(56),
+              child: _FilterRow(
+                current: _filter,
+                onChanged: (f) => setState(() => _filter = f),
               ),
             ),
           ),
@@ -51,37 +46,40 @@ class _TasksListPageState extends ConsumerState<TasksListPage> {
             const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (filteredTasks.isEmpty)
-            SliverFillRemaining(
-              child: _EmptyState(filter: _currentFilter),
-            )
+          else if (tasks.isEmpty)
+            SliverFillRemaining(child: _EmptyState(filter: _filter))
           else
             SliverPadding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               sliver: SliverList.separated(
-                itemCount: filteredTasks.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final task = filteredTasks[i];
+                itemCount: tasks.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (ctx, i) {
+                  final task = tasks[i];
                   return TaskCard(
                     task: task,
-                    showDate: _currentFilter != TaskFilter.today,
-                    onComplete: () => ref
-                        .read(taskViewModelProvider.notifier)
-                        .completeTask(task.id!),
-                    onSnooze: () => ref
-                        .read(taskViewModelProvider.notifier)
-                        .snoozeTask(task.id!),
-                    onTestReminder: () => ref
-                        .read(taskViewModelProvider.notifier)
-                        .triggerReminder(task),
+                    showDate: _filter != TaskFilter.today,
+                    onComplete: task.id == null
+                        ? null
+                        : () => ref
+                            .read(taskViewModelProvider.notifier)
+                            .completeTask(task.id!),
+                    onSnooze: task.id == null
+                        ? null
+                        : () => ref
+                            .read(taskViewModelProvider.notifier)
+                            .snoozeTask(task.id!),
+                    onTestReminder: task.id == null
+                        ? null
+                        : () => ref
+                            .read(taskViewModelProvider.notifier)
+                            .triggerReminder(task),
                     onEdit: () => Navigator.push(
-                      context,
+                      ctx,
                       MaterialPageRoute(
-                        builder: (_) => TaskFormPage(taskToEdit: task),
-                      ),
+                          builder: (_) => TaskFormPage(taskToEdit: task)),
                     ),
-                    onDelete: () => _confirmDelete(context, task),
+                    onDelete: () => _confirmDelete(ctx, task),
                   );
                 },
               ),
@@ -91,144 +89,112 @@ class _TasksListPageState extends ConsumerState<TasksListPage> {
     );
   }
 
-  List<Task> _applyFilter(List<Task> tasks) {
+  List<Task> _apply(List<Task> all) {
     final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-
-    switch (_currentFilter) {
-      case TaskFilter.all:
-        return tasks;
-      case TaskFilter.today:
-        return tasks.where((t) =>
-            t.scheduledDateTime.isAfter(startOfDay) &&
-            t.scheduledDateTime.isBefore(endOfDay)).toList();
-      case TaskFilter.pending:
-        return tasks.where((t) => !t.isCompleted && t.isActive).toList();
-      case TaskFilter.completed:
-        return tasks.where((t) => t.isCompleted).toList();
-      case TaskFilter.recurring:
-        return tasks.where((t) => t.isRecurring).toList();
+    final sod = DateTime(now.year, now.month, now.day);
+    final eod = sod.add(const Duration(days: 1));
+    if (_filter == TaskFilter.today) {
+      return all
+          .where((t) =>
+              t.scheduledDateTime.isAfter(sod) &&
+              t.scheduledDateTime.isBefore(eod))
+          .toList();
+    } else if (_filter == TaskFilter.pending) {
+      return all.where((t) => !t.isCompleted && t.isActive).toList();
+    } else if (_filter == TaskFilter.completed) {
+      return all.where((t) => t.isCompleted).toList();
+    } else if (_filter == TaskFilter.recurring) {
+      return all.where((t) => t.isRecurring).toList();
     }
+    return all;
   }
 
-  Future<void> _confirmDelete(BuildContext context, Task task) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+  Future<void> _confirmDelete(BuildContext ctx, Task task) async {
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Supprimer la tâche ?'),
         content: Text(
-          'Êtes-vous sûr de vouloir supprimer "${task.title}" ? '
-          'Cette action est irréversible.',
-        ),
+            'Supprimer "${task.title}" ? Cette action est irréversible.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Annuler')),
           FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
+            style:
+                FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(c, true),
             child: const Text('Supprimer'),
           ),
         ],
       ),
     );
-
-    if (confirmed == true && task.id != null) {
+    if (ok == true && task.id != null) {
       ref.read(taskViewModelProvider.notifier).deleteTask(task.id!);
     }
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// BARRE DE FILTRES
-// ─────────────────────────────────────────────────────────
+class _FilterRow extends StatelessWidget {
+  final TaskFilter current;
+  final ValueChanged<TaskFilter> onChanged;
+  const _FilterRow({required this.current, required this.onChanged});
 
-class _FilterBar extends StatelessWidget {
-  final TaskFilter currentFilter;
-  final ValueChanged<TaskFilter> onFilterChanged;
-
-  const _FilterBar({
-    required this.currentFilter,
-    required this.onFilterChanged,
-  });
+  static const List<Map<String, Object>> _filters = [
+    {
+      'filter': TaskFilter.today,
+      'label': "Aujourd'hui",
+      'icon': Icons.today_rounded,
+    },
+    {
+      'filter': TaskFilter.pending,
+      'label': 'En attente',
+      'icon': Icons.pending_actions_rounded,
+    },
+    {
+      'filter': TaskFilter.completed,
+      'label': 'Faites',
+      'icon': Icons.check_circle_rounded,
+    },
+    {
+      'filter': TaskFilter.recurring,
+      'label': 'Récurrentes',
+      'icon': Icons.repeat_rounded,
+    },
+    {
+      'filter': TaskFilter.all,
+      'label': 'Toutes',
+      'icon': Icons.list_rounded,
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 52,
-      child: ListView(
+      height: 48,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        children: [
-          _FilterChip(
-            label: "Aujourd'hui",
-            icon: Icons.today,
-            isSelected: currentFilter == TaskFilter.today,
-            onTap: () => onFilterChanged(TaskFilter.today),
-          ),
-          _FilterChip(
-            label: 'En attente',
-            icon: Icons.pending_actions,
-            isSelected: currentFilter == TaskFilter.pending,
-            onTap: () => onFilterChanged(TaskFilter.pending),
-          ),
-          _FilterChip(
-            label: 'Terminées',
-            icon: Icons.check_circle_outline,
-            isSelected: currentFilter == TaskFilter.completed,
-            onTap: () => onFilterChanged(TaskFilter.completed),
-          ),
-          _FilterChip(
-            label: 'Récurrentes',
-            icon: Icons.repeat,
-            isSelected: currentFilter == TaskFilter.recurring,
-            onTap: () => onFilterChanged(TaskFilter.recurring),
-          ),
-          _FilterChip(
-            label: 'Toutes',
-            icon: Icons.list,
-            isSelected: currentFilter == TaskFilter.all,
-            onTap: () => onFilterChanged(TaskFilter.all),
-          ),
-        ],
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: _filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final m = _filters[i];
+          final f = m['filter'] as TaskFilter;
+          final label = m['label'] as String;
+          final icon = m['icon'] as IconData;
+          return FilterChip(
+            avatar: Icon(icon, size: 15),
+            label: Text(label),
+            selected: current == f,
+            onSelected: (_) => onChanged(f),
+            visualDensity: VisualDensity.compact,
+          );
+        },
       ),
     );
   }
 }
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        avatar: Icon(icon, size: 16),
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (_) => onTap(),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-// ÉTAT VIDE
-// ─────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final TaskFilter filter;
@@ -236,44 +202,44 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String message;
+    final cs = Theme.of(context).colorScheme;
     IconData icon;
-
-    switch (filter) {
-      case TaskFilter.today:
-        message = 'Aucune tâche aujourd\'hui';
-        icon = Icons.event_available;
-        break;
-      case TaskFilter.pending:
-        message = 'Aucune tâche en attente';
-        icon = Icons.inbox;
-        break;
-      case TaskFilter.completed:
-        message = 'Aucune tâche terminée';
-        icon = Icons.check_circle_outline;
-        break;
-      case TaskFilter.recurring:
-        message = 'Aucune tâche récurrente';
-        icon = Icons.repeat;
-        break;
-      case TaskFilter.all:
-        message = 'Aucune tâche créée';
-        icon = Icons.add_task;
-        break;
+    String msg;
+    if (filter == TaskFilter.pending) {
+      icon = Icons.inbox_rounded;
+      msg = 'Aucune tâche en attente';
+    } else if (filter == TaskFilter.completed) {
+      icon = Icons.check_circle_outline_rounded;
+      msg = 'Aucune tâche terminée';
+    } else if (filter == TaskFilter.recurring) {
+      icon = Icons.repeat_rounded;
+      msg = 'Aucune tâche récurrente';
+    } else if (filter == TaskFilter.all) {
+      icon = Icons.add_task_rounded;
+      msg = 'Aucune tâche créée';
+    } else {
+      icon = Icons.event_available_rounded;
+      msg = 'Aucune tâche aujourd\'hui';
     }
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 72, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 40, color: cs.primary),
           ),
+          const SizedBox(height: 16),
+          Text(msg,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );

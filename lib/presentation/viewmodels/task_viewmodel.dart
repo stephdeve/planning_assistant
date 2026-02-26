@@ -6,6 +6,7 @@
 // Utilise AsyncNotifier de Riverpod pour la gestion d'état.
 // ============================================================
 
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task.dart';
 import '../../domain/usecases/task_usecases.dart';
@@ -63,6 +64,9 @@ class TaskViewModel extends Notifier<TasksState> {
   late final AudioService _audioService;
   late final SpeechService _speechService;
 
+  // IDs des tâches déjà déclenchées (pour éviter les doublons)
+  final Set<int> _triggeredTaskIds = {};
+
   @override
   TasksState build() {
     // Injection des dépendances via Riverpod
@@ -84,6 +88,12 @@ class TaskViewModel extends Notifier<TasksState> {
 
     // Charger les tâches au démarrage
     loadTasks();
+
+    // Timer en app : vérifie toutes les 30s si une tâche doit sonner
+    final timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkAndAutoTrigger();
+    });
+    ref.onDispose(() => timer.cancel());
 
     return const TasksState();
   }
@@ -244,11 +254,16 @@ class TaskViewModel extends Notifier<TasksState> {
 
   void _setupNotificationCallbacks() {
     _notificationService.onNotificationAction = (taskId, action) {
-      // Appelé quand l'utilisateur tape sur un bouton de notification
       if (action == NotificationActions.complete) {
         completeTask(taskId);
       } else if (action == NotificationActions.snooze) {
         snoozeTask(taskId);
+      } else {
+        // L'utilisateur a tapé la notification — déclencher le rappel
+        try {
+          final task = state.allTasks.firstWhere((t) => t.id == taskId);
+          triggerReminder(task);
+        } catch (_) {}
       }
     };
   }
@@ -282,6 +297,33 @@ class TaskViewModel extends Notifier<TasksState> {
 
   void clearError() {
     state = state.copyWith(errorMessage: null);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // TIMER ALARME AUTOMATIQUE
+  // ─────────────────────────────────────────────────────────
+
+  /// Appelé toutes les 30 secondes pour déclencher les rappels
+  /// quand l'app est ouverte et que l'heure de la tâche arrive.
+  void _checkAndAutoTrigger() {
+    final now = DateTime.now();
+    final activeReminder = ref.read(activeReminderProvider);
+
+    // Ne pas déclencher si un rappel est déjà en cours
+    if (activeReminder != null) return;
+
+    for (final task in state.allTasks) {
+      if (task.id == null || task.isCompleted || !task.isActive) continue;
+      if (_triggeredTaskIds.contains(task.id)) continue;
+
+      final diff = now.difference(task.scheduledDateTime);
+      // Déclencher si l'heure est passée depuis moins de 60 secondes
+      if (diff.inSeconds >= 0 && diff.inSeconds <= 60) {
+        _triggeredTaskIds.add(task.id!);
+        triggerReminder(task);
+        break; // Un seul rappel à la fois
+      }
+    }
   }
 }
 

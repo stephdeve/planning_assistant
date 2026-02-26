@@ -1,15 +1,8 @@
-// ============================================================
-// PAGE D'ACCUEIL — TABLEAU DE BORD
-// Affiche les tâches du jour, un résumé global et l'accès
-// rapide à toutes les fonctionnalités principales.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/task.dart';
 import '../viewmodels/task_viewmodel.dart';
-import '../viewmodels/ai_chat_viewmodel.dart';
 import '../../core/providers.dart';
 import 'task_form_page.dart';
 import 'ai_chat_page.dart';
@@ -19,7 +12,6 @@ import '../widgets/task_card.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
-
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
 }
@@ -27,66 +19,71 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   int _currentIndex = 0;
 
-  // Pages du BottomNavigationBar
-  final _pages = const [
-    _DashboardTab(),
-    TasksListPage(),
-    AiChatPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    // Surveiller si un rappel est actif pour afficher l'overlay
     final activeReminder = ref.watch(activeReminderProvider);
+    final pages = [
+      const _DashboardTab(),
+      const TasksListPage(),
+      const AiChatPage(),
+    ];
 
     return Stack(
       children: [
         Scaffold(
-          body: IndexedStack(
-            index: _currentIndex,
-            children: _pages,
+          extendBody: true,
+          body: IndexedStack(index: _currentIndex, children: pages),
+          bottomNavigationBar: _BottomBar(
+            currentIndex: _currentIndex,
+            onTap: (i) => setState(() => _currentIndex = i),
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (i) =>
-                setState(() => _currentIndex = i),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'Tableau de bord',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.task_alt_outlined),
-                selectedIcon: Icon(Icons.task_alt),
-                label: 'Tâches',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.smart_toy_outlined),
-                selectedIcon: Icon(Icons.smart_toy),
-                label: 'Assistant IA',
-              ),
-            ],
-          ),
-          // FAB pour créer une tâche rapidement (masqué sur l'onglet IA)
           floatingActionButton: _currentIndex == 2
               ? null
               : FloatingActionButton.extended(
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const TaskFormPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const TaskFormPage()),
                   ),
-                  icon: const Icon(Icons.add_alarm),
-                  label: const Text('Nouvelle tâche'),
+                  icon: const Icon(Icons.add_alarm_rounded),
+                  label: const Text('Nouvelle tâche',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.endFloat,
         ),
-
-        // Overlay de rappel actif — affiché par-dessus tout le contenu
-        // quand une tâche est en train de sonner
         if (activeReminder != null)
           ActiveReminderOverlay(task: activeReminder),
+      ],
+    );
+  }
+}
+
+class _BottomBar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  const _BottomBar({required this.currentIndex, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return NavigationBar(
+      selectedIndex: currentIndex,
+      onDestinationSelected: onTap,
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard_rounded),
+          label: 'Tableau de bord',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.task_alt_outlined),
+          selectedIcon: Icon(Icons.task_alt_rounded),
+          label: 'Tâches',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.smart_toy_outlined),
+          selectedIcon: Icon(Icons.smart_toy_rounded),
+          label: 'Assistant IA',
+        ),
       ],
     );
   }
@@ -103,205 +100,251 @@ class _DashboardTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final taskState = ref.watch(taskViewModelProvider);
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final now = DateTime.now();
+    final greeting = _greeting(now.hour);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Bonjour 👋'),
-            Text(
-              DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {}, // TODO: historique des notifications
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(taskViewModelProvider.notifier).loadTasks(),
-        child: CustomScrollView(
-          slivers: [
-            // ─── Résumé statistique ───────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _StatsRow(tasks: taskState.allTasks),
+    return CustomScrollView(
+      slivers: [
+        // ─── Gradient Header ────────────────────────────────
+        SliverToBoxAdapter(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.primary,
+                  cs.primary.withValues(alpha: 0.75),
+                ],
               ),
             ),
-
-            // ─── Tâches du jour ───────────────────────────────────
-            SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Aujourd'hui",
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                greeting,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                DateFormat('EEEE d MMMM', 'fr_FR').format(now),
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Colors.white24,
+                          child: Text(
+                            greeting.substring(0, 1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Chip(
-                      label: Text('${taskState.todayTasks.length}'),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
+                    const SizedBox(height: 20),
+                    // Stat chips
+                    _StatChipsRow(tasks: taskState.allTasks),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
 
-            if (taskState.isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (taskState.todayTasks.isEmpty)
-              SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.event_available,
-                          size: 64,
-                          color: theme.colorScheme.outline),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Aucune tâche aujourd\'hui',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Profitez de votre journée libre !'),
-                    ],
+        // ─── Section "Aujourd'hui" ───────────────────────────
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+          sliver: SliverToBoxAdapter(
+            child: Row(
+              children: [
+                Text(
+                  "Aujourd'hui",
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverList.builder(
-                  itemCount: taskState.todayTasks.length,
-                  itemBuilder: (_, i) {
-                    final task = taskState.todayTasks[i];
-                    return TaskCard(
-                      task: task,
-                      onComplete: () => ref
-                          .read(taskViewModelProvider.notifier)
-                          .completeTask(task.id!),
-                      onSnooze: () => ref
-                          .read(taskViewModelProvider.notifier)
-                          .snoozeTask(task.id!),
-                      onTestReminder: () => ref
-                          .read(taskViewModelProvider.notifier)
-                          .triggerReminder(task),
-                      onEdit: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TaskFormPage(taskToEdit: task),
-                        ),
-                      ),
-                    );
-                  },
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${taskState.todayTasks.length}',
+                    style: TextStyle(
+                      color: cs.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
-      ),
+
+        // ─── Task list ──────────────────────────────────────
+        if (taskState.isLoading)
+          const SliverFillRemaining(
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (taskState.todayTasks.isEmpty)
+          SliverFillRemaining(
+            child: _EmptyDashboard(cs: cs),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+            sliver: SliverList.separated(
+              itemCount: taskState.todayTasks.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (ctx, i) {
+                final task = taskState.todayTasks[i];
+                return TaskCard(
+                  task: task,
+                  onComplete: () => ref
+                      .read(taskViewModelProvider.notifier)
+                      .completeTask(task.id!),
+                  onSnooze: () => ref
+                      .read(taskViewModelProvider.notifier)
+                      .snoozeTask(task.id!),
+                  onTestReminder: () => ref
+                      .read(taskViewModelProvider.notifier)
+                      .triggerReminder(task),
+                  onEdit: () => Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                        builder: (_) => TaskFormPage(taskToEdit: task)),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
+  }
+
+  String _greeting(int hour) {
+    if (hour < 6) return 'Bonne nuit 🌙';
+    if (hour < 12) return 'Bonjour ☀️';
+    if (hour < 18) return 'Bon après-midi 🌤️';
+    return 'Bonsoir 🌆';
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// WIDGET STATISTIQUES
-// ─────────────────────────────────────────────────────────
-
-class _StatsRow extends StatelessWidget {
+class _StatChipsRow extends StatelessWidget {
   final List<Task> tasks;
-  const _StatsRow({required this.tasks});
+  const _StatChipsRow({required this.tasks});
 
   @override
   Widget build(BuildContext context) {
     final total = tasks.length;
-    final completed = tasks.where((t) => t.isCompleted).length;
-    final recurring = tasks.where((t) => t.isRecurring).length;
+    final done = tasks.where((t) => t.isCompleted).length;
     final pending = tasks.where((t) => !t.isCompleted && t.isActive).length;
 
     return Row(
       children: [
-        _StatCard(value: '$total', label: 'Total', icon: Icons.list_alt),
+        _Chip(label: '$total tâches', icon: Icons.list_alt_rounded),
         const SizedBox(width: 8),
-        _StatCard(
-            value: '$pending',
-            label: 'En attente',
-            icon: Icons.pending_actions,
-            color: Colors.orange),
+        _Chip(label: '$pending en attente', icon: Icons.pending_actions_rounded, color: Colors.orangeAccent),
         const SizedBox(width: 8),
-        _StatCard(
-            value: '$completed',
-            label: 'Terminées',
-            icon: Icons.check_circle_outline,
-            color: Colors.green),
-        const SizedBox(width: 8),
-        _StatCard(
-            value: '$recurring',
-            label: 'Récurrentes',
-            icon: Icons.repeat,
-            color: Colors.blue),
+        _Chip(label: '$done faites', icon: Icons.check_circle_rounded, color: Colors.greenAccent),
       ],
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String value;
+class _Chip extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color? color;
-
-  const _StatCard({
-    required this.value,
-    required this.label,
-    required this.icon,
-    this.color,
-  });
+  const _Chip({required this.label, required this.icon, this.color});
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor =
-        color ?? Theme.of(context).colorScheme.primary;
+    final c = color ?? Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: c),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
 
-    return Expanded(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Column(
-            children: [
-              Icon(icon, color: effectiveColor, size: 20),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: effectiveColor,
-                    ),
-              ),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelSmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
+class _EmptyDashboard extends StatelessWidget {
+  final ColorScheme cs;
+  const _EmptyDashboard({required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 90,
+            height: 90,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.event_available_rounded,
+                size: 44, color: cs.primary),
           ),
-        ),
+          const SizedBox(height: 20),
+          Text(
+            'Journée libre !',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Aucune tâche planifiée aujourd\'hui.',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: cs.outline),
+          ),
+        ],
       ),
     );
   }

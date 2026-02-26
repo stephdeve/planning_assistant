@@ -1,153 +1,162 @@
-// ============================================================
-// POINT D'ENTRÉE DE L'APPLICATION
-// Configure Riverpod, le thème Material 3, les locales FR,
-// initialise le Workmanager et charge le fichier .env.
-// ============================================================
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-// ignore: depend_on_referenced_packages
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'services/background_task_service.dart';
 import 'services/permission_service.dart';
 import 'presentation/pages/home_page.dart';
 
-/// Point d'entrée principal de l'application.
-/// L'ordre d'initialisation est important :
-/// 1. Flutter binding (requis avant tout appel natif)
-/// 2. Variables d'environnement (.env)
-/// 3. Localisation française pour les dates
-/// 4. Workmanager (background tasks)
 Future<void> main() async {
-  // Indispensable avant tout appel à une API native Flutter
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Charger les variables d'environnement depuis le fichier .env
-  // Le fichier .env doit être à la racine du projet et
-  // déclaré dans pubspec.yaml > assets
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+  ));
   await dotenv.load(fileName: '.env');
-
-  // Initialiser les données de localisation pour le français
-  // (nécessaire pour DateFormat avec 'fr_FR')
   await initializeDateFormatting('fr_FR', null);
-
-  // Initialiser le Workmanager pour les tâches en arrière-plan
-  // Le dispatcher est enregistré ici, une seule fois au démarrage
   await BackgroundTaskService.initialize();
   await BackgroundTaskService.registerPeriodicCheck();
-
-  runApp(
-    // ProviderScope est le container Riverpod global.
-    // TOUT le tree de widgets a accès aux providers grâce à lui.
-    const ProviderScope(
-      child: VocalPlanningApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: VocalPlanningApp()));
 }
 
-/// Widget racine de l'application.
-/// Configure le thème Material 3 et les localisations.
 class VocalPlanningApp extends ConsumerStatefulWidget {
   const VocalPlanningApp({super.key});
-
   @override
-  ConsumerState<VocalPlanningApp> createState() =>
-      _VocalPlanningAppState();
+  ConsumerState<VocalPlanningApp> createState() => _VocalPlanningAppState();
 }
 
 class _VocalPlanningAppState extends ConsumerState<VocalPlanningApp> {
   @override
   void initState() {
     super.initState();
-    // Demander les permissions dès le premier lancement.
-    // On ne bloque pas le démarrage en cas de refus : l'application
-    // reste fonctionnelle, seules les features impactées sont désactivées.
     _requestPermissions();
   }
 
   Future<void> _requestPermissions() async {
-    // Laisser l'UI se construire avant de demander les permissions
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 600));
     await PermissionService().requestAllPermissions();
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Vocal Planning Assistant',
-      debugShowCheckedModeBanner: false,
+    const seedColor = Color(0xFF7C4DFF);
 
-      // ─── Thème Material 3 ─────────────────────────────────
-      // Material 3 offre des composants modernes (NavigationBar,
-      // FilledButton, etc.) et un système de couleurs cohérent.
+    final baseTextTheme = GoogleFonts.interTextTheme();
+
+    return MaterialApp(
+      title: 'Planning Assistant',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4), // Violet Material 3
+          seedColor: seedColor,
           brightness: Brightness.light,
         ),
-        // Style global des cartes
+        textTheme: baseTextTheme,
         cardTheme: CardThemeData(
-          elevation: 1,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
+          color: const Color(0xFFF5F0FF),
         ),
-        // Style global des champs de texte
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
+          fillColor: const Color(0xFFF5F0FF),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
           ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: seedColor, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
-        // Style global des AppBar
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           elevation: 0,
-          scrolledUnderElevation: 2,
+          scrolledUnderElevation: 0,
+          backgroundColor: Colors.transparent,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          elevation: 0,
+          height: 68,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          indicatorShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          elevation: 4,
+        ),
+        chipTheme: ChipThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
-
-      // Thème sombre (cohérent avec le thème clair)
       darkTheme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
+          seedColor: seedColor,
           brightness: Brightness.dark,
         ),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         cardTheme: CardThemeData(
-          elevation: 1,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
+          color: const Color(0xFF1E1A2E),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
+          fillColor: const Color(0xFF1E1A2E),
           border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: seedColor, width: 2),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          backgroundColor: Colors.transparent,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          elevation: 0,
+          height: 68,
+          indicatorShape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
-
-      // Respecter les préférences système (clair/sombre)
       themeMode: ThemeMode.system,
-
-      // ─── Localisation française ───────────────────────────
-      // Obligatoire pour les widgets natifs Flutter en français
-      // (DatePicker, TimePicker, etc.)
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('fr', 'FR'),
-        Locale('en', 'US'), // Fallback anglais
-      ],
+      supportedLocales: const [Locale('fr', 'FR'), Locale('en', 'US')],
       locale: const Locale('fr', 'FR'),
-
       home: const HomePage(),
     );
   }

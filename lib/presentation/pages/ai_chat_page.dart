@@ -1,20 +1,11 @@
-// ============================================================
-// PAGE CHAT IA — ASSISTANT INTELLIGENT DE PLANNING
-// Interface conversationnelle avec l'IA pour analyser et
-// optimiser le planning. Propose des raccourcis de questions
-// courantes et affiche les réponses en temps réel.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../core/providers.dart';
 import '../viewmodels/ai_chat_viewmodel.dart';
 import '../viewmodels/task_viewmodel.dart';
 
 class AiChatPage extends ConsumerStatefulWidget {
   const AiChatPage({super.key});
-
   @override
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
 }
@@ -22,15 +13,23 @@ class AiChatPage extends ConsumerStatefulWidget {
 class _AiChatPageState extends ConsumerState<AiChatPage> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  bool _hasText = false;
 
-  // Questions suggérées pour guider l'utilisateur
   final _suggestions = [
     "Que me reste-t-il aujourd'hui ?",
-    "Réorganise mes tâches de demain.",
-    "Y a-t-il des conflits dans mon planning ?",
-    "Optimise mon planning de la semaine.",
-    "Quelles sont mes tâches récurrentes ?",
+    'Y a-t-il des conflits dans mon planning ?',
+    'Optimise mon planning de la semaine.',
+    'Quelles sont mes tâches récurrentes ?',
+    'Réorganise mes tâches de demain.',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      setState(() => _hasText = _controller.text.trim().isNotEmpty);
+    });
+  }
 
   @override
   void dispose() {
@@ -43,13 +42,13 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(aiChatViewModelProvider);
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    // Auto-scroll vers le bas à chaque nouveau message
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
@@ -57,66 +56,83 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        backgroundColor: cs.surface,
+        title: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: Color(0xFF6750A4),
-              radius: 16,
-              child: Icon(Icons.smart_toy, size: 18, color: Colors.white),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.tertiary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.smart_toy_rounded,
+                  size: 20, color: Colors.white),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Assistant IA'),
-                Text('Powered by GPT', style: TextStyle(fontSize: 11)),
+                Text('Assistant IA',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Powered by GPT',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: cs.outline)),
               ],
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined),
-            tooltip: 'Effacer la conversation',
-            onPressed: () => ref
-                .read(aiChatViewModelProvider.notifier)
-                .clearConversation(),
-          ),
+          if (chatState.messages.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined),
+              tooltip: 'Effacer',
+              onPressed: () =>
+                  ref.read(aiChatViewModelProvider.notifier).clearConversation(),
+            ),
         ],
       ),
+
       body: Column(
         children: [
-          // ─── Zone de messages ──────────────────────────────────
+          // ─── Messages ─────────────────────────────────────
           Expanded(
             child: chatState.messages.isEmpty
-                ? _WelcomeScreen(suggestions: _suggestions, onSuggestionTap: _sendSuggestion)
+                ? _WelcomeScreen(
+                    suggestions: _suggestions,
+                    onTap: _sendSuggestion,
+                  )
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     itemCount: chatState.messages.length +
                         (chatState.isLoading ? 1 : 0),
                     itemBuilder: (_, i) {
                       if (i == chatState.messages.length) {
-                        // Indicateur de chargement à la fin
-                        return const _TypingIndicator();
+                        return const _TypingBubble();
                       }
-                      return _MessageBubble(
-                          message: chatState.messages[i]);
+                      return _MessageBubble(message: chatState.messages[i]);
                     },
                   ),
           ),
 
-          // ─── Suggestions rapides (seulement si peu de messages) ──
+          // ─── Quick suggestions ────────────────────────────
           if (chatState.messages.length < 3)
             _SuggestionsRow(
               suggestions: _suggestions.take(3).toList(),
               onTap: _sendSuggestion,
             ),
 
-          // ─── Barre de saisie ───────────────────────────────────
+          // ─── Input bar ────────────────────────────────────
           _InputBar(
             controller: _controller,
             isLoading: chatState.isLoading,
+            hasText: _hasText,
             onSend: _sendMessage,
           ),
         ],
@@ -127,114 +143,131 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   void _sendMessage() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-
     _controller.clear();
     final tasks = ref.read(taskViewModelProvider).allTasks;
     ref.read(aiChatViewModelProvider.notifier).sendMessage(text, tasks);
   }
 
-  void _sendSuggestion(String suggestion) {
-    _controller.text = suggestion;
+  void _sendSuggestion(String s) {
+    _controller.text = s;
     _sendMessage();
   }
 }
 
 // ─────────────────────────────────────────────────────────
-// WIDGETS INTERNES
-// ─────────────────────────────────────────────────────────
 
-/// Écran d'accueil du chat quand aucun message n'existe
 class _WelcomeScreen extends StatelessWidget {
   final List<String> suggestions;
-  final ValueChanged<String> onSuggestionTap;
-
-  const _WelcomeScreen({required this.suggestions, required this.onSuggestionTap});
+  final ValueChanged<String> onTap;
+  const _WelcomeScreen({required this.suggestions, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(height: 32),
-          Container(
+      children: [
+        const SizedBox(height: 24),
+        Center(
+          child: Container(
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
+              gradient: LinearGradient(
+                colors: [cs.primary, cs.tertiary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: cs.primary.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                )
+              ],
             ),
-            child: Icon(
-              Icons.smart_toy,
-              size: 40,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            child:
+                const Icon(Icons.smart_toy_rounded, size: 40, color: Colors.white),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'Votre assistant planning IA',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Posez-moi n\'importe quelle question sur votre planning. '
-            'Je peux détecter les conflits, optimiser votre emploi du temps '
-            'et répondre à vos questions.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'Questions suggérées',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 12),
-          ...suggestions.map((s) => _SuggestionCard(
-                text: s,
-                onTap: () => onSuggestionTap(s),
-              )),
-        ],
-      ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Votre assistant planning IA',
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Posez n\'importe quelle question sur votre planning. '
+          'Je détecte les conflits, optimise votre emploi du temps et réponds à vos questions.',
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: cs.outline),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        Text('Suggestions',
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        ...suggestions.map((s) => _SuggestionTile(text: s, onTap: onTap)),
+      ],
     );
   }
 }
 
-class _SuggestionCard extends StatelessWidget {
+class _SuggestionTile extends StatelessWidget {
   final String text;
-  final VoidCallback onTap;
-
-  const _SuggestionCard({required this.text, required this.onTap});
+  final ValueChanged<String> onTap;
+  const _SuggestionTile({required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(Icons.lightbulb_outline,
-            color: Theme.of(context).colorScheme.primary),
-        title: Text(text),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: cs.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () => onTap(text),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.lightbulb_rounded,
+                    size: 18, color: cs.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(text,
+                        style: const TextStyle(fontWeight: FontWeight.w500))),
+                Icon(Icons.arrow_forward_rounded,
+                    size: 16, color: cs.outline),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Bulle de message individuelle (utilisateur ou IA)
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
-
   const _MessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
     final isUser = message.isFromUser;
 
     return Padding(
@@ -242,33 +275,41 @@ class _MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Avatar IA
           if (!isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: Icon(Icons.smart_toy,
-                  size: 16, color: theme.colorScheme.primary),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.tertiary],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.smart_toy_rounded,
+                  size: 16, color: Colors.white),
             ),
             const SizedBox(width: 8),
           ],
-
-          // Contenu du message
           Flexible(
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isUser
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surfaceVariant,
+                color: isUser ? cs.primary : cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isUser ? 16 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 16),
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isUser ? 18 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 18),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,28 +317,23 @@ class _MessageBubble extends StatelessWidget {
                   Text(
                     message.content,
                     style: TextStyle(
-                      color: isUser
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
+                      color: isUser ? cs.onPrimary : cs.onSurface,
+                      height: 1.45,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     DateFormat('HH:mm').format(message.timestamp),
                     style: TextStyle(
                       fontSize: 10,
-                      color: (isUser
-                              ? theme.colorScheme.onPrimary
-                              : theme.colorScheme.onSurfaceVariant)
-                          .withOpacity(0.6),
+                      color: (isUser ? cs.onPrimary : cs.outline)
+                          .withValues(alpha: 0.7),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-
-          // Espace côté utilisateur
           if (isUser) const SizedBox(width: 40),
         ],
       ),
@@ -305,51 +341,53 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-/// Indicateur "l'IA est en train de taper..."
-class _TypingIndicator extends StatelessWidget {
-  const _TypingIndicator();
-
+class _TypingBubble extends StatelessWidget {
+  const _TypingBubble();
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor:
-                Theme.of(context).colorScheme.primaryContainer,
-            child: Icon(Icons.smart_toy,
-                size: 16,
-                color: Theme.of(context).colorScheme.primary),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.smart_toy_rounded,
+                size: 16, color: Colors.white),
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: cs.surfaceContainerHigh,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomRight: Radius.circular(18),
                 bottomLeft: Radius.circular(4),
               ),
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(
-                  width: 40,
-                  height: 16,
-                  child: LinearProgressIndicator(),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'En train de réfléchir...',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: 12,
+                SizedBox(
+                  width: 36,
+                  height: 14,
+                  child: LinearProgressIndicator(
+                    borderRadius: BorderRadius.circular(4),
+                    color: cs.primary,
+                    backgroundColor: cs.primaryContainer,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text('Réflexion…',
+                    style: TextStyle(color: cs.outline, fontSize: 13)),
               ],
             ),
           ),
@@ -359,24 +397,26 @@ class _TypingIndicator extends StatelessWidget {
   }
 }
 
-/// Rangée de suggestions rapides sous la zone de messages
 class _SuggestionsRow extends StatelessWidget {
   final List<String> suggestions;
   final ValueChanged<String> onTap;
-
   const _SuggestionsRow({required this.suggestions, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         itemCount: suggestions.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) => ActionChip(
-          label: Text(suggestions[i], style: const TextStyle(fontSize: 12)),
+          label: Text(suggestions[i],
+              style: TextStyle(fontSize: 12, color: cs.primary)),
+          backgroundColor: cs.primaryContainer.withValues(alpha: 0.5),
+          side: BorderSide(color: cs.primary.withValues(alpha: 0.25)),
           onPressed: () => onTap(suggestions[i]),
         ),
       ),
@@ -384,70 +424,89 @@ class _SuggestionsRow extends StatelessWidget {
   }
 }
 
-/// Barre de saisie avec bouton d'envoi
 class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final bool isLoading;
+  final bool hasText;
   final VoidCallback onSend;
-
   const _InputBar({
     required this.controller,
     required this.isLoading,
+    required this.hasText,
     required this.onSend,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Posez votre question...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(24)),
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                maxLines: 4,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => onSend(),
+                decoration: InputDecoration(
+                  hintText: 'Posez votre question…',
+                  hintStyle: TextStyle(color: cs.outline),
+                  filled: true,
+                  fillColor: cs.surfaceContainerHigh,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
-              maxLines: 4,
-              minLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => onSend(),
             ),
-          ),
-          const SizedBox(width: 8),
-          // Bouton d'envoi (ou spinner si en cours)
-          FilledButton(
-            onPressed: isLoading ? null : onSend,
-            style: FilledButton.styleFrom(
-              shape: const CircleBorder(),
-              padding: const EdgeInsets.all(12),
+            const SizedBox(width: 8),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              child: Material(
+                color: (hasText && !isLoading) ? cs.primary : cs.surfaceContainerHigh,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: (isLoading) ? null : onSend,
+                  customBorder: const CircleBorder(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.primary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            size: 20,
+                            color: hasText ? cs.onPrimary : cs.outline,
+                          ),
+                  ),
+                ),
+              ),
             ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.send),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

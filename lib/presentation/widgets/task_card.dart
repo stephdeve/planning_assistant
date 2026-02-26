@@ -1,15 +1,7 @@
-// ============================================================
-// WIDGET CARTE DE TÂCHE — COMPOSANT RÉUTILISABLE
-// Affiche une tâche avec ses informations, son état et
-// ses actions rapides. Design adaptatif selon le contexte.
-// ============================================================
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/task.dart';
 
-/// Carte affichant une tâche avec toutes ses métadonnées et actions.
-/// [showDate] : afficher ou non la date complète (pas utile si déjà dans un groupe par date)
 class TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback? onComplete;
@@ -33,282 +25,259 @@ class TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final timeFormatter = DateFormat('HH:mm');
     final dateFormatter = DateFormat('d MMM', 'fr_FR');
 
-    // Couleur de l'indicateur gauche selon l'état
-    final statusColor = task.isCompleted
-        ? Colors.green
-        : _isOverdue()
-            ? Colors.red
-            : theme.colorScheme.primary;
+    Color accentColor;
+    if (task.isCompleted) {
+      accentColor = Colors.green;
+    } else if (_isOverdue()) {
+      accentColor = cs.error;
+    } else {
+      accentColor = cs.primary;
+    }
 
-    return Card(
-      // Légèrement transparent si terminée
-      color: task.isCompleted
-          ? theme.colorScheme.surface.withOpacity(0.7)
-          : theme.colorScheme.surface,
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onEdit,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ─── Indicateur de statut ─────────────────────────
-              Container(
-                width: 4,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.cardTheme.color,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: task.isCompleted
+                  ? Colors.green.withValues(alpha: 0.2)
+                  : _isOverdue()
+                      ? cs.error.withValues(alpha: 0.3)
+                      : cs.outlineVariant.withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                // ─── Accent bar ──────────────────────────────
+                Container(
+                  width: 4,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 14),
 
-              // ─── Contenu principal ────────────────────────────
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Ligne du haut : heure + badges
-                    Row(
-                      children: [
-                        Icon(Icons.access_time,
-                            size: 14, color: statusColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          showDate
-                              ? '${dateFormatter.format(task.scheduledDateTime)} ${timeFormatter.format(task.scheduledDateTime)}'
-                              : timeFormatter.format(task.scheduledDateTime),
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
+                // ─── Content ─────────────────────────────────
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.schedule_rounded,
+                              size: 13, color: accentColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            showDate
+                                ? '${dateFormatter.format(task.scheduledDateTime)} · ${timeFormatter.format(task.scheduledDateTime)}'
+                                : timeFormatter.format(task.scheduledDateTime),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: accentColor,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
                           ),
+                          const Spacer(),
+                          if (task.isRecurring)
+                            _Badge(
+                              label: _recurrenceLabel(task),
+                              icon: Icons.repeat_rounded,
+                              color: Colors.blue,
+                            ),
+                          if (task.isCompleted)
+                            const _Badge(
+                              label: 'Fait',
+                              icon: Icons.check_circle_rounded,
+                              color: Colors.green,
+                            ),
+                          if (_isOverdue() && !task.isCompleted)
+                            _Badge(
+                              label: 'En retard',
+                              icon: Icons.warning_amber_rounded,
+                              color: cs.error,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        task.title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: task.isCompleted ? cs.outline : null,
                         ),
-                        const Spacer(),
-                        // Badge récurrence
-                        if (task.isRecurring)
-                          _Badge(
-                            label: _recurrenceShortLabel(task),
-                            icon: Icons.repeat,
-                            color: Colors.blue,
-                          ),
-                        // Badge terminé
-                        if (task.isCompleted)
-                          const _Badge(
-                            label: 'Terminé',
-                            icon: Icons.check,
-                            color: Colors.green,
-                          ),
-                        // Badge en retard
-                        if (_isOverdue() && !task.isCompleted)
-                          const _Badge(
-                            label: 'En retard',
-                            icon: Icons.warning_amber,
-                            color: Colors.red,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Titre
-                    Text(
-                      task.title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        // Barré si terminée
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: task.isCompleted
-                            ? theme.colorScheme.outline
-                            : null,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-
-                    // Description (tronquée à 2 lignes)
-                    Text(
-                      task.description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                      const SizedBox(height: 3),
+                      Text(
+                        task.description,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.outline),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // ─── Actions rapides ──────────────────────────────
-              if (!task.isCompleted)
+                // ─── Actions ─────────────────────────────────
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Bouton "Terminer"
-                    if (onComplete != null)
-                      _ActionButton(
-                        icon: Icons.check_circle_outline,
-                        tooltip: 'Terminer',
+                    if (!task.isCompleted && onComplete != null)
+                      _IconBtn(
+                        icon: Icons.check_circle_outline_rounded,
                         color: Colors.green,
+                        tooltip: 'Terminer',
                         onTap: onComplete!,
                       ),
-                    // Bouton "Reporter"
-                    if (onSnooze != null)
-                      _ActionButton(
-                        icon: Icons.snooze,
-                        tooltip: 'Reporter 10 min',
+                    if (!task.isCompleted && onSnooze != null)
+                      _IconBtn(
+                        icon: Icons.snooze_rounded,
                         color: Colors.orange,
+                        tooltip: 'Reporter',
                         onTap: onSnooze!,
                       ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert_rounded,
+                          size: 18, color: cs.outline),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      onSelected: (v) {
+                        if (v == 'edit') onEdit?.call();
+                        if (v == 'delete') onDelete?.call();
+                        if (v == 'complete') onComplete?.call();
+                        if (v == 'snooze') onSnooze?.call();
+                        if (v == 'test') onTestReminder?.call();
+                      },
+                      itemBuilder: (_) => [
+                        if (!task.isCompleted) ...[
+                          _menuItem('complete', Icons.check_circle_rounded,
+                              'Terminer', Colors.green),
+                          _menuItem('snooze', Icons.snooze_rounded,
+                              'Reporter 10 min', Colors.orange),
+                          _menuItem('test', Icons.volume_up_rounded,
+                              'Tester le rappel 🔔', cs.primary),
+                        ],
+                        _menuItem(
+                            'edit', Icons.edit_rounded, 'Modifier', cs.onSurface),
+                        if (onDelete != null)
+                          _menuItem('delete', Icons.delete_rounded,
+                              'Supprimer', cs.error),
+                      ],
+                    ),
                   ],
                 ),
-
-              // Menu contextuel (plus d'options)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 18),
-                onSelected: (value) {
-                  if (value == 'edit') onEdit?.call();
-                  if (value == 'delete') onDelete?.call();
-                  if (value == 'complete') onComplete?.call();
-                  if (value == 'snooze') onSnooze?.call();
-                  if (value == 'test_reminder') onTestReminder?.call();
-                },
-                itemBuilder: (_) => [
-                  if (!task.isCompleted) ...[
-                    const PopupMenuItem(
-                      value: 'complete',
-                      child: ListTile(
-                        leading: Icon(Icons.check_circle, color: Colors.green),
-                        title: Text('Terminer'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'snooze',
-                      child: ListTile(
-                        leading: Icon(Icons.snooze, color: Colors.orange),
-                        title: Text('Reporter 10 min'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'test_reminder',
-                      child: ListTile(
-                        leading: Icon(Icons.volume_up, color: Colors.purple),
-                        title: Text('Tester le rappel 🔔'),
-                        dense: true,
-                      ),
-                    ),
-                  ],
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: ListTile(
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Modifier'),
-                      dense: true,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: ListTile(
-                      leading: Icon(Icons.delete_outline, color: Colors.red),
-                      title: Text('Supprimer',
-                          style: TextStyle(color: Colors.red)),
-                      dense: true,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  bool _isOverdue() {
-    return task.scheduledDateTime.isBefore(DateTime.now()) &&
-        !task.isCompleted;
+  PopupMenuItem<String> _menuItem(
+      String value, IconData icon, String label, Color color) {
+    return PopupMenuItem(
+      value: value,
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        dense: true,
+        leading: Icon(icon, color: color, size: 20),
+        title: Text(label,
+            style: TextStyle(
+                color: color == Colors.red ? color : null,
+                fontWeight: FontWeight.w500)),
+      ),
+    );
   }
 
-  String _recurrenceShortLabel(Task task) {
-    switch (task.recurrenceType) {
+  bool _isOverdue() =>
+      task.scheduledDateTime.isBefore(DateTime.now()) && !task.isCompleted;
+
+  String _recurrenceLabel(Task t) {
+    switch (t.recurrenceType) {
       case RecurrenceType.daily:
         return '/ jour';
       case RecurrenceType.weekly:
-        return '/ semaine';
+        return '/ sem.';
       case RecurrenceType.hourly:
-        return '/ ${task.recurrenceIntervalHours}h';
+        return '/ ${t.recurrenceIntervalHours}h';
       case RecurrenceType.none:
         return '';
     }
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// COMPOSANTS INTERNES
-// ─────────────────────────────────────────────────────────
-
 class _Badge extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
-
   const _Badge({required this.label, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(left: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 10, color: color),
           const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: color,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10, color: color, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _IconBtn extends StatelessWidget {
   final IconData icon;
-  final String tooltip;
   final Color color;
+  final String tooltip;
   final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.tooltip,
-    required this.color,
-    required this.onTap,
-  });
+  const _IconBtn(
+      {required this.icon,
+      required this.color,
+      required this.tooltip,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: Icon(icon, size: 20, color: color),
-      tooltip: tooltip,
-      onPressed: onTap,
-      visualDensity: VisualDensity.compact,
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(icon, size: 22, color: color),
+        ),
+      ),
     );
   }
 }

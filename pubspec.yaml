@@ -1,0 +1,81 @@
+name: vocal_planning_assistant
+description: Assistant vocal intelligent de planning - Application Flutter complète
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.17.0 <4.0.0" # Mis à jour pour supporter les records et les dernières optimisations Dart
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # === ARCHITECTURE & STATE MANAGEMENT ===
+  # Riverpod 3.x introduit la persistance native et les mutations simplifiées
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # === BASE DE DONNÉES LOCALE ===
+  sqflite: ^2.4.2
+  path: ^1.9.1
+
+  # === NOTIFICATIONS LOCALES ===
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
+  # === TEXT-TO-SPEECH ===
+  flutter_tts: ^4.2.2
+
+  # === SPEECH-TO-TEXT ===
+  speech_to_text: ^7.3.0
+
+  # === TÂCHES EN ARRIÈRE-PLAN ===
+  workmanager: ^0.6.0
+
+  # === LECTURE AUDIO (ALARME) ===
+  audioplayers: ^6.1.0
+
+  # === HTTP CLIENT POUR L'API IA ===
+  dio: ^5.7.0
+
+  # === GESTION DES PERMISSIONS ===
+  permission_handler: ^11.4.0
+
+  # === VARIABLES D'ENVIRONNEMENT ===
+  flutter_dotenv: ^5.2.1
+
+  # === UTILITAIRES UI ===
+  intl: ^0.20.2
+  gap: ^3.0.1
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+  lottie: ^3.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0 # Mise à jour des règles d'analyse standard
+  riverpod_generator: ^2.6.5
+  build_runner: ^2.4.15
+
+dependency_overrides:
+  analyzer: ^7.3.0
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/sounds/
+    - assets/animations/
+    - .env
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

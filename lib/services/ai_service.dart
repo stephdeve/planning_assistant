@@ -51,8 +51,16 @@ class AiService {
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
-        'Authorization': 'Bearer $_apiKey',
         'Content-Type': 'application/json',
+      },
+    ));
+
+    // Intercepteur qui injecte la clé API au moment de la requête
+    // (après que _apiKey ait été assigné depuis le .env)
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        options.headers['Authorization'] = 'Bearer $_apiKey';
+        handler.next(options);
       },
     ));
 

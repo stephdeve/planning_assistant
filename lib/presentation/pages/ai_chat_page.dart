@@ -423,8 +423,10 @@ class _InputBar extends StatelessWidget {
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
-              maxLines: null,
+              maxLines: 4,
+              minLines: 1,
               textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
             ),
           ),

@@ -72,6 +72,9 @@ class _TasksListPageState extends ConsumerState<TasksListPage> {
                     onSnooze: () => ref
                         .read(taskViewModelProvider.notifier)
                         .snoozeTask(task.id!),
+                    onTestReminder: () => ref
+                        .read(taskViewModelProvider.notifier)
+                        .triggerReminder(task),
                     onEdit: () => Navigator.push(
                       context,
                       MaterialPageRoute(

@@ -16,6 +16,7 @@ class TaskCard extends StatelessWidget {
   final VoidCallback? onSnooze;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onTestReminder;
   final bool showDate;
 
   const TaskCard({
@@ -25,6 +26,7 @@ class TaskCard extends StatelessWidget {
     this.onSnooze,
     this.onEdit,
     this.onDelete,
+    this.onTestReminder,
     this.showDate = false,
   });
 
@@ -173,6 +175,7 @@ class TaskCard extends StatelessWidget {
                   if (value == 'delete') onDelete?.call();
                   if (value == 'complete') onComplete?.call();
                   if (value == 'snooze') onSnooze?.call();
+                  if (value == 'test_reminder') onTestReminder?.call();
                 },
                 itemBuilder: (_) => [
                   if (!task.isCompleted) ...[
@@ -189,6 +192,14 @@ class TaskCard extends StatelessWidget {
                       child: ListTile(
                         leading: Icon(Icons.snooze, color: Colors.orange),
                         title: Text('Reporter 10 min'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'test_reminder',
+                      child: ListTile(
+                        leading: Icon(Icons.volume_up, color: Colors.purple),
+                        title: Text('Tester le rappel 🔔'),
                         dense: true,
                       ),
                     ),

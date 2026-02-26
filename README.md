@@ -103,7 +103,7 @@ Ajoutez un fichier `alarm.mp3` dans `assets/sounds/`. Vous pouvez utiliser n'imp
 flutter doctor
 ```
 
-Tous les éléments de la liste doivent être ✅ (sauf iOS si vous n'avez pas de Mac).
+Tous les éléments de la liste doivent être  (sauf iOS si vous n'avez pas de Mac).
 
 ---
 

@@ -221,14 +221,15 @@ class TaskViewModel extends Notifier<TasksState> {
     // Enregistrer la tâche active pour l'affichage UI
     ref.read(activeReminderProvider.notifier).state = task;
 
-    // Jouer l'alarme + TTS
+    // Jouer l'alarme + TTS — attendre la fin complète
     await _audioService.playFullReminder(
       taskTitle: task.title,
       taskDescription: task.description,
     );
 
-    // Démarrer l'écoute vocale automatiquement après le TTS
-    await Future.delayed(const Duration(seconds: 1));
+    // Attendre que l'audio soit libéré (Android audio focus)
+    // avant de démarrer le micro
+    await Future.delayed(const Duration(milliseconds: 800));
     _startVoiceListening();
   }
 

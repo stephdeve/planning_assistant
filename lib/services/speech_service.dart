@@ -6,6 +6,7 @@
 
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_listen_options.dart';
 
 /// Commandes vocales reconnues par l'application
 enum VoiceCommand {
@@ -54,10 +55,13 @@ class SpeechService {
     await _speech.listen(
       onResult: _onSpeechResult,
       localeId: localeId,
-      listenFor: const Duration(seconds: 10), // Écoute max 10 secondes
-      pauseFor: const Duration(seconds: 3),   // Pause avant arrêt auto
-      partialResults: true,                   // Résultats partiels activés
-      listenMode: stt.ListenMode.dictation,
+      listenFor: const Duration(seconds: 15), // Écoute max 15 secondes
+      pauseFor: const Duration(seconds: 4),   // Pause avant arrêt auto
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        listenMode: stt.ListenMode.dictation,
+        cancelOnError: false,
+      ),
     );
 
     _isListening = true;

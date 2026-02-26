@@ -6,6 +6,7 @@
 // et expose des méthodes simples pour les ViewModels.
 // ============================================================
 
+import 'dart:async';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 
@@ -79,21 +80,32 @@ class AudioService {
   // LECTURE D'ALARME
   // ─────────────────────────────────────────────────────────
 
-  /// Joue l'alarme sonore depuis les assets.
-  /// Le fichier alarm.mp3 doit être placé dans assets/sounds/.
+  /// Joue l'alarme sonore depuis les assets et ATTEND sa fin.
   Future<void> playAlarm() async {
     if (_isAlarmPlaying) return;
 
     try {
+      // Completer pour attendre la fin réelle de la lecture
+      final completer = Completer<void>();
+      _audioPlayer.onPlayerComplete.listen((_) {
+        if (!completer.isCompleted) completer.complete();
+      });
+
       await _audioPlayer.play(
         AssetSource('sounds/alarm.mp3'),
         volume: 1.0,
       );
       _isAlarmPlaying = true;
+
+      // Attendre la fin du fichier audio (ou timeout 10s)
+      await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {},
+      );
+      _isAlarmPlaying = false;
     } catch (e) {
-      // Fallback : utiliser un son système si l'asset est absent
-      // En production, l'asset devrait toujours être présent
-      print('Erreur lecture alarme : $e');
+      _isAlarmPlaying = false;
+      // Fallback silencieux : l'alarme est facultative
     }
   }
 
@@ -118,12 +130,34 @@ class AudioService {
     await speak(text);
   }
 
-  /// Lit n'importe quel texte à voix haute
+  /// Lit n'importe quel texte à voix haute et ATTEND la fin
   Future<void> speak(String text) async {
     if (_ttsState == TtsState.playing) {
       await _tts.stop();
     }
+
+    // Completer pour attendre la fin réelle du TTS
+    final completer = Completer<void>();
+
+    _tts.setCompletionHandler(() {
+      _ttsState = TtsState.stopped;
+      onTtsStateChanged?.call(TtsState.stopped);
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    _tts.setErrorHandler((message) {
+      _ttsState = TtsState.error;
+      onTtsStateChanged?.call(TtsState.error);
+      if (!completer.isCompleted) completer.complete();
+    });
+
     await _tts.speak(text);
+
+    // Attendre la fin de la lecture (ou timeout 30s)
+    await completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {},
+    );
   }
 
   /// Arrête la synthèse vocale en cours

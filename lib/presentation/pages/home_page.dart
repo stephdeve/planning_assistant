@@ -68,17 +68,19 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ],
           ),
-          // FAB pour créer une tâche rapidement depuis n'importe quel onglet
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const TaskFormPage(),
-              ),
-            ),
-            icon: const Icon(Icons.add_alarm),
-            label: const Text('Nouvelle tâche'),
-          ),
+          // FAB pour créer une tâche rapidement (masqué sur l'onglet IA)
+          floatingActionButton: _currentIndex == 2
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const TaskFormPage(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_alarm),
+                  label: const Text('Nouvelle tâche'),
+                ),
         ),
 
         // Overlay de rappel actif — affiché par-dessus tout le contenu
